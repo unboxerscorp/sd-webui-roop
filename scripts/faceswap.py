@@ -192,3 +192,42 @@ class FaceSwapScript(scripts.Script):
                 pp.info = {}
                 p.extra_generation_params.update(pp.info)
                 script_pp.image = pp.image
+
+
+def sd_webui_roop_api(_, app: FastAPI):
+    @app.post("/roop")
+    async def roop(
+        input_image: UploadFile = File(...),
+        target_image: UploadFile = File(...),
+        faces_index: str = "0",
+    ):
+        input_image = Image.open(input_image.file)
+        target_image = Image.open(target_image.file)
+        faces_index = {int(x) for x in faces_index.strip(",").split(",") if x.isnumeric()}
+        if len(faces_index) != 1:
+            faces_index = {0}
+        model = get_models()[0]
+        face_restorer = shared.face_restorers[0]
+        result = swap_face(
+            input_image,
+            target_image,
+            faces_index=faces_index,
+            model=model,
+            upscale_options=UpscaleOptions(
+                scale=1.0,
+                # upscaler=upscaler_name,
+                face_restorer=face_restorer,
+                upscale_visibility=1.0,
+                restorer_visibility=1.0,
+            ),
+        )
+        result_image = result.image()
+        img_byte_array = io.BytesIO()
+        result_image.save(img_byte_array, format="PNG")
+        return StreamingResponse(io.BytesIO(img_byte_array.getvalue()), media_type="image/png")
+try:
+    import modules.script_callbacks as script_callbacks
+    script_callbacks.on_app_started(sd_webui_roop_api)
+except:
+    pass
+
